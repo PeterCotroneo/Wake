@@ -216,7 +216,8 @@ class OpenWatersProvider(AisStreamLikeProvider):
     help_text = ('Open, volunteer-fed AIS network. Get a free token at '
                  '<a href="https://openwatersio.github.io/aiscast/token.html">'
                  'openwatersio.github.io/aiscast/token.html</a> '
-                 '(personal tier: 20°×20° area).')
+                 '(personal tier: 20°×20° area). This feed carries positions '
+                 'and names but not ship types, so vessels show as Unknown.')
     config_fields = [
         {"key": "api_key", "label": "Token", "secret": True,
          "placeholder": "aiscast token"},

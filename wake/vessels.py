@@ -109,14 +109,17 @@ CATEGORY_COLORS = [
     ("High-speed", "#17becf"),
     ("Special", "#8c564b"),
     ("Other", "#7f7f7f"),
+    ("Unknown", "#b0b0b0"),
 ]
 
 
 def _type_group(type_code):
+    if type_code is None:
+        return "Unknown"
     try:
         code = int(type_code)
     except (TypeError, ValueError):
-        return "Other"
+        return "Unknown"
     if 60 <= code <= 69:
         return "Passenger"
     if 70 <= code <= 79:
