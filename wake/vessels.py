@@ -319,9 +319,20 @@ class VesselStore:
                 mmsis.append(mmsi)
             if feats:
                 ok, added = dp.addFeatures(feats)
-                if ok:
-                    for mmsi, f in zip(mmsis, added):
-                        self._fid[mmsi] = f.id()
+                if added:
+                    # map by each feature's own MMSI (order-independent) so we
+                    # never lose an id and duplicate the vessel next message
+                    for f in added:
+                        m = f["mmsi"]
+                        if m:
+                            self._fid[m] = f.id()
+                else:
+                    # provider returned no feature list; recover ids by scanning
+                    want = set(mmsis)
+                    for feat in self._layer.getFeatures():
+                        m = feat["mmsi"]
+                        if m in want:
+                            self._fid[m] = feat.id()
             self._pending_new.clear()
 
         # updates (geometry + attributes)
