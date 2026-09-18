@@ -1,0 +1,111 @@
+"""aisstream.io provider — the first Wake AIS source.
+
+Uses Qt's own WebSocket (``QWebSocket``), so there is no external dependency to
+install into QGIS. Message shapes verified live 2026-09-18 against
+wss://stream.aisstream.io/v0/stream. Bounding boxes are [[lat_min, lon_min],
+[lat_max, lon_max]] (confirmed with real vessels off Felixstowe and Singapore).
+
+Free service; the user supplies their own aisstream.io API key.
+"""
+
+import json
+
+from qgis.PyQt.QtCore import QUrl, QTimer
+from qgis.PyQt.QtWebSockets import QWebSocket
+
+from .base import AisProvider
+
+STREAM_URL = "wss://stream.aisstream.io/v0/stream"
+RECONNECT_MS = 3000
+_POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
+
+
+class AisStreamProvider(AisProvider):
+    id = "aisstream"
+    label = "aisstream.io (free — account & API key required)"
+    requires_api_key = True
+
+    def __init__(self, api_key, parent=None):
+        super().__init__(parent)
+        self._key = api_key
+        self._bboxes = []
+        self._want = False  # whether we should be connected (drives reconnect)
+
+        self._ws = QWebSocket()
+        self._ws.connected.connect(self._on_connected)
+        self._ws.disconnected.connect(self._on_disconnected)
+        self._ws.textMessageReceived.connect(self._on_message)
+        self._ws.errorOccurred.connect(
+            lambda _err: self.error.emit(self._ws.errorString()))
+
+        self._reconnect = QTimer(self)
+        self._reconnect.setSingleShot(True)
+        self._reconnect.timeout.connect(self._open)
+
+    # --- AisProvider interface ------------------------------------------
+    def start(self, bboxes):
+        self._bboxes = list(bboxes)
+        self._want = True
+        self._open()
+
+    def stop(self):
+        self._want = False
+        self._reconnect.stop()
+        self._ws.close()
+
+    # --- socket lifecycle -----------------------------------------------
+    def _open(self):
+        if not self._want:
+            return
+        self.status_changed.emit("Connecting…")
+        self._ws.open(QUrl(STREAM_URL))
+
+    def _on_connected(self):
+        subscription = {
+            "APIKey": self._key,
+            "BoundingBoxes": [[[b[0], b[1]], [b[2], b[3]]] for b in self._bboxes],
+            "FilterMessageTypes": [
+                "PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
+        }
+        self._ws.sendTextMessage(json.dumps(subscription))
+        self.status_changed.emit("Connected")
+
+    def _on_disconnected(self):
+        self.status_changed.emit("Disconnected")
+        if self._want:
+            self._reconnect.start(RECONNECT_MS)  # auto-reconnect with backoff
+
+    # --- message decoding (normalises to the base-class contract) --------
+    def _on_message(self, text):
+        try:
+            message = json.loads(text)
+        except (ValueError, TypeError):
+            return
+        kind = message.get("MessageType")
+        if kind == "ErrorMessage":
+            self.error.emit(str(message.get("Message")))
+            return
+        meta = message.get("MetaData", {})
+
+        if kind in _POSITION_TYPES:
+            body = message.get("Message", {}).get(kind, {})
+            self.vessel_update.emit({
+                "mmsi": str(meta.get("MMSI") or body.get("UserID")),
+                "name": (meta.get("ShipName") or "").strip(),
+                "lat": meta.get("latitude", body.get("Latitude")),
+                "lon": meta.get("longitude", body.get("Longitude")),
+                "cog": body.get("Cog"),
+                "sog": body.get("Sog"),
+                "heading": body.get("TrueHeading"),
+                "nav_status": body.get("NavigationalStatus"),
+                "ship_class": "A" if kind == "PositionReport" else "B",
+                "last_seen": meta.get("time_utc"),
+            })
+        elif kind == "ShipStaticData":
+            body = message.get("Message", {}).get("ShipStaticData", {})
+            self.vessel_update.emit({
+                "mmsi": str(meta.get("MMSI") or body.get("UserID")),
+                "name": (meta.get("ShipName") or body.get("Name") or "").strip(),
+                "type_code": body.get("Type"),
+                "destination": (body.get("Destination") or "").strip(),
+            })
