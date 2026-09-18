@@ -176,8 +176,30 @@ class VesselStore:
             if idx >= 0:
                 layer.setFieldAlias(idx, alias)
         layer.setMapTipTemplate(_MAP_TIP)
+        self._add_actions(layer)
         self._style(layer)
         QgsProject.instance().addMapLayer(layer)
+
+    def _add_actions(self, layer):
+        """Right-click / Identify actions that open the vessel's page (photo +
+        full details) in the browser, keyed by MMSI. No scraping — just links."""
+        try:
+            from qgis.core import QgsAction
+            try:
+                url_type = Qgis.AttributeActionType.OpenUrl
+            except AttributeError:
+                url_type = QgsAction.OpenUrl
+            targets = [
+                ("Look up on MarineTraffic",
+                 'https://www.marinetraffic.com/en/ais/details/ships/mmsi:[% "mmsi" %]'),
+                ("Look up on VesselFinder",
+                 'https://www.vesselfinder.com/?mmsi=[% "mmsi" %]'),
+            ]
+            for label, url in targets:
+                layer.actions().addAction(url_type, label, url)
+        except Exception as exc:  # noqa: BLE001 - actions are a nicety
+            QgsMessageLog.logMessage(f"actions skipped: {exc}", "Wake",
+                                     Qgis.MessageLevel.Warning)
         self._layer = layer
         self._records.clear()
         self._fid.clear()
