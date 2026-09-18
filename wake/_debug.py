@@ -1,14 +1,12 @@
-"""Temporary tracer for diagnosing the live path.
+"""In-app activity feed.
 
-Writes to ~/wake_debug.log AND fans out to any registered sinks (the plugin's
-in-panel log view). All callers are on the GUI thread, so sinks may touch
-widgets directly. Remove once the plugin is confirmed working.
+Messages are shown in the plugin's collapsible Activity panel via registered
+sinks. No file is written. All callers are on the GUI thread, so sinks may
+touch widgets directly.
 """
 
-import os
 import time
 
-_PATH = os.path.expanduser("~/wake_debug.log")
 _sinks = []
 
 
@@ -22,12 +20,7 @@ def clear_sinks():
 
 
 def dbg(msg):
-    line = f"{time.strftime('%H:%M:%S')} {msg}"
-    try:
-        with open(_PATH, "a") as fh:
-            fh.write(line + "\n")
-    except Exception:
-        pass
+    line = f"{time.strftime('%H:%M:%S')}  {msg}"
     for fn in list(_sinks):
         try:
             fn(line)

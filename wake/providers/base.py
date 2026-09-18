@@ -37,8 +37,22 @@ class AisProvider(QObject):
     id = "base"
     #: label shown in the provider dropdown
     label = "Abstract provider"
-    #: whether the UI must collect an API key for this provider
-    requires_api_key = False
+    #: one-line help / how-to shown in the configure dialog
+    help_text = ""
+    #: settings the provider needs, rendered by the configure dialog as fields.
+    #: each is {"key", "label", "secret" (bool), "placeholder" (optional)}.
+    #: an empty list means the provider needs no configuration.
+    config_fields = []
+
+    def __init__(self, settings=None, parent=None):
+        """`settings` is a dict of {field key: value} gathered from
+        ``config_fields`` (empty/absent for providers that need none)."""
+        super().__init__(parent)
+        self.settings = settings or {}
+
+    @classmethod
+    def needs_config(cls):
+        return bool(cls.config_fields)
 
     def start(self, bboxes):
         """Begin streaming for ``bboxes`` — a list of (lat_min, lon_min,

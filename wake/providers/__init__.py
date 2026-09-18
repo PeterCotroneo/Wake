@@ -1,16 +1,18 @@
 """Provider registry.
 
-Adding a new AIS source is a two-line change: implement AisProvider in a new
-module here, then register its class below. The plugin builds its provider
-dropdown from PROVIDERS, so nothing else needs to change.
+Adding a new AIS source: implement AisProvider in a new module, declare its
+``config_fields`` (what the configure dialog should ask for), and register its
+class below. The plugin builds its provider dropdown and settings dialog from
+PROVIDERS + each provider's config_fields — nothing else needs to change.
 """
 
 from .base import AisProvider
-from .aisstream import AisStreamProvider
+from .aisstream import AisStreamProvider, OpenWatersProvider
 
-# id -> provider class
+# id -> provider class (order shown in the dropdown)
 PROVIDERS = {
     AisStreamProvider.id: AisStreamProvider,
+    OpenWatersProvider.id: OpenWatersProvider,
 }
 
-__all__ = ["AisProvider", "AisStreamProvider", "PROVIDERS"]
+__all__ = ["AisProvider", "AisStreamProvider", "OpenWatersProvider", "PROVIDERS"]

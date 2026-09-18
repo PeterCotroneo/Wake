@@ -11,18 +11,18 @@ import os
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (
-    QAction, QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QLineEdit,
-    QRadioButton, QButtonGroup, QPushButton, QGroupBox, QFormLayout,
-    QPlainTextEdit,
+    QAction, QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+    QRadioButton, QButtonGroup, QPushButton, QGroupBox, QPlainTextEdit,
 )
 from qgis.core import (
-    QgsSettings, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
+    QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsRectangle, QgsPointXY, QgsWkbTypes, QgsMessageLog, Qgis,
 )
 from qgis.gui import QgsMapTool, QgsRubberBand, QgsCollapsibleGroupBox
 
 from .providers import PROVIDERS
 from .vessels import VesselStore
+from .config_dialog import ProviderConfigDialog, load_settings, is_configured
 from ._debug import dbg, add_sink, clear_sinks
 
 FLUSH_MS = 1000            # batch map updates once a second
@@ -153,18 +153,18 @@ class WakePlugin:
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
-        # provider + key
+        # provider + configure button
         src = QGroupBox("Source")
-        form = QFormLayout(src)
+        s_layout = QVBoxLayout(src)
+        row = QHBoxLayout()
         self.cbo_provider = QComboBox()
         for pid, cls in PROVIDERS.items():
             self.cbo_provider.addItem(cls.label, pid)
-        self.cbo_provider.currentIndexChanged.connect(self._on_provider_changed)
-        form.addRow("Provider", self.cbo_provider)
-        self.le_key = QLineEdit()
-        self.le_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.le_key.setPlaceholderText("aisstream.io API key")
-        form.addRow("API key", self.le_key)
+        row.addWidget(self.cbo_provider, 1)
+        self.btn_config = QPushButton("Configure…")
+        self.btn_config.clicked.connect(self._on_configure)
+        row.addWidget(self.btn_config, 0)
+        s_layout.addLayout(row)
         layout.addWidget(src)
 
         # area
@@ -193,7 +193,7 @@ class WakePlugin:
         layout.addStretch(1)   # absorb extra space so controls stay tight at top
 
         # collapsible debug log (closed by default), pinned at the bottom
-        log_box = QgsCollapsibleGroupBox("Debug Log")
+        log_box = QgsCollapsibleGroupBox("Activity")
         log_box.setCollapsed(True)
         log_layout = QVBoxLayout(log_box)
         self.log_view = QPlainTextEdit()
@@ -211,21 +211,16 @@ class WakePlugin:
         add_sink(self._log_line)
 
         dock.setWidget(panel)
-        self._on_provider_changed()
         return dock
 
     def _log_line(self, line):
         if self.log_view is not None:
             self.log_view.appendPlainText(line)
 
-    def _on_provider_changed(self, *_):
-        pid = self.cbo_provider.currentData()
-        cls = PROVIDERS.get(pid)
-        needs_key = bool(cls and cls.requires_api_key)
-        self.le_key.setVisible(needs_key)
-        if needs_key:
-            saved = QgsSettings().value(f"wake/{pid}/api_key", "", type=str)
-            self.le_key.setText(saved)
+    def _on_configure(self):
+        cls = PROVIDERS.get(self.cbo_provider.currentData())
+        if cls is not None:
+            ProviderConfigDialog(cls, self.iface.mainWindow()).exec()
 
     def _on_area_mode_changed(self, *_):
         if self.rb_draw.isChecked():
@@ -277,22 +272,20 @@ class WakePlugin:
         if cls is None:
             return
 
-        api_key = ""
-        if cls.requires_api_key:
-            api_key = self.le_key.text().strip()
-            if not api_key:
-                bar.pushWarning("Wake", "Enter your API key first.")
+        if not is_configured(cls):
+            bar.pushWarning("Wake", f"Configure {cls.label} first.")
+            ProviderConfigDialog(cls, self.iface.mainWindow()).exec()
+            if not is_configured(cls):
                 return
-            QgsSettings().setValue(f"wake/{pid}/api_key", api_key)
 
         bbox = self._bbox_wgs84()
         if bbox is None:
             bar.pushWarning("Wake", "Draw an area on the map first.")
             return
 
-        dbg(f"Started tracking with {cls.label.split(' (')[0]}.")
+        dbg(f"Started tracking with {cls.label}.")
         self.store.ensure_layer()
-        self.provider = cls(api_key) if cls.requires_api_key else cls()
+        self.provider = cls(load_settings(cls))
         self.provider.vessel_update.connect(self.store.ingest)
         self.provider.status_changed.connect(self._on_status)
         self.provider.error.connect(self._on_error)

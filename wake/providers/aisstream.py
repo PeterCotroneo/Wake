@@ -1,22 +1,17 @@
-"""aisstream.io provider — the first Wake AIS source.
+"""aisstream.io-compatible WebSocket AIS providers.
 
-Uses Qt's own WebSocket (``QWebSocket``), so there is no external dependency to
-install into QGIS. Message shapes verified live 2026-09-18 against
-wss://stream.aisstream.io/v0/stream. Bounding boxes are [[lat_min, lon_min],
-[lat_max, lon_max]] (confirmed with real vessels off Felixstowe and Singapore).
-
-Free service; the user supplies their own aisstream.io API key.
+aisstream.io and Open Waters (aiscast) speak the same protocol — connect to a
+WebSocket, send a JSON subscription with BoundingBoxes + FilterMessageTypes,
+and receive AIS messages (as binary frames). So both share one implementation
+and differ only by URL and the label of their key field. Uses Qt's built-in
+QWebSocket — no external dependency.
 """
 
 import json
 
 from qgis.PyQt.QtCore import QUrl, QTimer
-from qgis.core import QgsMessageLog, Qgis
 
-from .._debug import dbg
-
-# qgis.PyQt does not forward QtWebSockets, so import it from the Qt binding
-# directly (PyQt6 on QGIS 4 / Qt6, PyQt5 on QGIS 3 / Qt5).
+# qgis.PyQt does not forward QtWebSockets; import it from the binding directly.
 try:
     from PyQt6.QtWebSockets import QWebSocket
 except ImportError:  # pragma: no cover - QGIS 3.x
@@ -26,38 +21,37 @@ except ImportError:  # pragma: no cover - QGIS 3.x
         QWebSocket = None
 
 from .base import AisProvider
+from .._debug import dbg
 
-STREAM_URL = "wss://stream.aisstream.io/v0/stream"
 RECONNECT_MS = 3000
 _POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
 
 
 def _fmt_area(bboxes):
-    """Human-readable bbox list for the log."""
     return "; ".join(
         f"lat {b[0]:.2f}…{b[2]:.2f}, lon {b[1]:.2f}…{b[3]:.2f}" for b in bboxes)
 
 
-class AisStreamProvider(AisProvider):
-    id = "aisstream"
-    label = "aisstream.io (free — account & API key required)"
-    requires_api_key = True
+class AisStreamLikeProvider(AisProvider):
+    """Shared logic for aisstream.io-compatible feeds. Subclasses set
+    ``stream_url`` (and their own id/label/config_fields)."""
 
-    def __init__(self, api_key, parent=None):
-        super().__init__(parent)
-        self._key = api_key
+    stream_url = ""
+
+    def __init__(self, settings=None, parent=None):
+        super().__init__(settings, parent)
+        self._key = (self.settings.get("api_key") or "").strip()
         self._bboxes = []
-        self._want = False  # whether we should be connected (drives reconnect)
+        self._want = False
         self._connected = False
         self._ws = None
         self._reconnect = None
         if QWebSocket is None:
-            return  # start() will report the missing-binding error
+            return
 
         self._ws = QWebSocket()
         self._ws.connected.connect(self._on_connected)
         self._ws.disconnected.connect(self._on_disconnected)
-        # aisstream sends JSON as binary frames; handle both text and binary.
         self._ws.textMessageReceived.connect(self._on_text)
         self._ws.binaryMessageReceived.connect(self._on_binary)
         self._ws.errorOccurred.connect(
@@ -70,8 +64,10 @@ class AisStreamProvider(AisProvider):
     # --- AisProvider interface ------------------------------------------
     def start(self, bboxes):
         if self._ws is None:
-            self.error.emit(
-                "QtWebSockets is not available in this QGIS build; cannot stream AIS.")
+            self.error.emit("QtWebSockets is not available in this QGIS build.")
+            return
+        if not self._key:
+            self.error.emit("No key/token configured — use Configure provider.")
             return
         self._bboxes = list(bboxes)
         self._want = True
@@ -84,12 +80,18 @@ class AisStreamProvider(AisProvider):
         if self._ws is not None:
             self._ws.close()
 
+    def update_area(self, bboxes):
+        self._bboxes = list(bboxes)
+        if self._connected and self._ws is not None:
+            dbg("Map moved — updating watch area")
+            self._send_subscription()
+
     # --- socket lifecycle -----------------------------------------------
     def _open(self):
         if not self._want:
             return
         self.status_changed.emit("Connecting…")
-        self._ws.open(QUrl(STREAM_URL))
+        self._ws.open(QUrl(self.stream_url))
 
     def _send_subscription(self):
         subscription = {
@@ -105,24 +107,16 @@ class AisStreamProvider(AisProvider):
 
     def _on_connected(self):
         self._connected = True
-        self._msg_count = 0
-        dbg("Connected to aisstream.io")
+        dbg(f"Connected to {self.label}")
         self._send_subscription()
         self.status_changed.emit("Connected")
-
-    def update_area(self, bboxes):
-        """Re-subscribe to a new area on the live socket (no reconnect)."""
-        self._bboxes = list(bboxes)
-        if self._connected and self._ws is not None:
-            dbg("Map moved — updating watch area")
-            self._send_subscription()
 
     def _on_disconnected(self):
         self._connected = False
         dbg("Connection dropped — reconnecting…")
         self.status_changed.emit("Disconnected")
         if self._want:
-            self._reconnect.start(RECONNECT_MS)  # auto-reconnect with backoff
+            self._reconnect.start(RECONNECT_MS)
 
     # --- message decoding (normalises to the base-class contract) --------
     def _on_text(self, text):
@@ -132,7 +126,7 @@ class AisStreamProvider(AisProvider):
         try:
             self._handle(bytes(data).decode("utf-8", "replace"))
         except Exception as exc:  # noqa: BLE001
-            dbg(f"binary decode error: {exc}")
+            dbg(f"decode error: {exc}")
 
     def _handle(self, text):
         try:
@@ -177,7 +171,6 @@ class AisStreamProvider(AisProvider):
                 "draught": body.get("MaximumStaticDraught"),
             })
         elif kind == "StaticDataReport":
-            # Class B static (two parts: ReportA=name, ReportB=type/callsign/size)
             body = message.get("Message", {}).get("StaticDataReport", {})
             report_a = body.get("ReportA") or {}
             report_b = body.get("ReportB") or {}
@@ -201,3 +194,28 @@ class AisStreamProvider(AisProvider):
             if beam:
                 update["beam"] = beam
             self.vessel_update.emit(update)
+
+
+class AisStreamProvider(AisStreamLikeProvider):
+    id = "aisstream"
+    label = "aisstream.io"
+    stream_url = "wss://stream.aisstream.io/v0/stream"
+    help_text = ("Free global AIS. Create a free account at aisstream.io, "
+                 "generate an API key, and paste it here.")
+    config_fields = [
+        {"key": "api_key", "label": "API key", "secret": True,
+         "placeholder": "aisstream.io API key"},
+    ]
+
+
+class OpenWatersProvider(AisStreamLikeProvider):
+    id = "openwaters"
+    label = "Open Waters (aiscast)"
+    stream_url = "wss://ais.openwaters.io/v0/stream"
+    help_text = ("Open, volunteer-fed AIS network (aisstream-compatible). Get a "
+                 "free token at openwatersio.github.io/aiscast/token.html "
+                 "(personal tier: 20°×20° area).")
+    config_fields = [
+        {"key": "api_key", "label": "Token", "secret": True,
+         "placeholder": "aiscast token"},
+    ]
