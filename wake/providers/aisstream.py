@@ -11,7 +11,16 @@ Free service; the user supplies their own aisstream.io API key.
 import json
 
 from qgis.PyQt.QtCore import QUrl, QTimer
-from qgis.PyQt.QtWebSockets import QWebSocket
+
+# qgis.PyQt does not forward QtWebSockets, so import it from the Qt binding
+# directly (PyQt6 on QGIS 4 / Qt6, PyQt5 on QGIS 3 / Qt5).
+try:
+    from PyQt6.QtWebSockets import QWebSocket
+except ImportError:  # pragma: no cover - QGIS 3.x
+    try:
+        from PyQt5.QtWebSockets import QWebSocket
+    except ImportError:
+        QWebSocket = None
 
 from .base import AisProvider
 
@@ -30,6 +39,10 @@ class AisStreamProvider(AisProvider):
         self._key = api_key
         self._bboxes = []
         self._want = False  # whether we should be connected (drives reconnect)
+        self._ws = None
+        self._reconnect = None
+        if QWebSocket is None:
+            return  # start() will report the missing-binding error
 
         self._ws = QWebSocket()
         self._ws.connected.connect(self._on_connected)
@@ -44,14 +57,20 @@ class AisStreamProvider(AisProvider):
 
     # --- AisProvider interface ------------------------------------------
     def start(self, bboxes):
+        if self._ws is None:
+            self.error.emit(
+                "QtWebSockets is not available in this QGIS build; cannot stream AIS.")
+            return
         self._bboxes = list(bboxes)
         self._want = True
         self._open()
 
     def stop(self):
         self._want = False
-        self._reconnect.stop()
-        self._ws.close()
+        if self._reconnect is not None:
+            self._reconnect.stop()
+        if self._ws is not None:
+            self._ws.close()
 
     # --- socket lifecycle -----------------------------------------------
     def _open(self):
