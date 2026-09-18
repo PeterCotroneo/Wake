@@ -13,6 +13,7 @@ from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (
     QAction, QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QLineEdit,
     QRadioButton, QButtonGroup, QPushButton, QGroupBox, QFormLayout,
+    QPlainTextEdit,
 )
 from qgis.core import (
     QgsSettings, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
@@ -22,7 +23,7 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 
 from .providers import PROVIDERS
 from .vessels import VesselStore
-from ._debug import dbg
+from ._debug import dbg, add_sink, clear_sinks
 
 FLUSH_MS = 1000            # batch map updates once a second
 STALE_SECONDS = 600        # drop vessels not heard from in 10 minutes
@@ -88,6 +89,7 @@ class WakePlugin:
         self.drawn_rect = None      # QgsRectangle in map CRS
         self._last_status = "Idle"
         self._running = False
+        self.log_view = None
 
     # --- plugin lifecycle ------------------------------------------------
     def initGui(self):
@@ -99,6 +101,8 @@ class WakePlugin:
         self.iface.addPluginToMenu("Wake", self.action)
 
     def unload(self):
+        clear_sinks()
+        self.log_view = None
         self._stop()
         if self.rect_tool is not None:
             self.iface.mapCanvas().unsetMapTool(self.rect_tool)
@@ -172,11 +176,30 @@ class WakePlugin:
 
         self.lbl_status = QLabel("Idle")
         layout.addWidget(self.lbl_status)
-        layout.addStretch(1)
+
+        # temporary in-panel log
+        log_box = QGroupBox("Log")
+        log_layout = QVBoxLayout(log_box)
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setMaximumBlockCount(500)
+        self.log_view.setPlaceholderText("Diagnostic output appears here once you Start.")
+        log_layout.addWidget(self.log_view)
+        btn_clear = QPushButton("Clear log")
+        btn_clear.clicked.connect(self.log_view.clear)
+        log_layout.addWidget(btn_clear)
+        layout.addWidget(log_box, 1)
+
+        clear_sinks()
+        add_sink(self._log_line)
 
         dock.setWidget(panel)
         self._on_provider_changed()
         return dock
+
+    def _log_line(self, line):
+        if self.log_view is not None:
+            self.log_view.appendPlainText(line)
 
     def _on_provider_changed(self, *_):
         pid = self.cbo_provider.currentData()

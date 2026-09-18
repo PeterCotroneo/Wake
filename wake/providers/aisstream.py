@@ -50,18 +50,11 @@ class AisStreamProvider(AisProvider):
         self._ws = QWebSocket()
         self._ws.connected.connect(self._on_connected)
         self._ws.disconnected.connect(self._on_disconnected)
-        self._ws.textMessageReceived.connect(self._on_message)
+        # aisstream sends JSON as binary frames; handle both text and binary.
+        self._ws.textMessageReceived.connect(self._on_text)
+        self._ws.binaryMessageReceived.connect(self._on_binary)
         self._ws.errorOccurred.connect(
-            lambda _err: (dbg(f"errorOccurred: {self._ws.errorString()}"),
-                          self.error.emit(self._ws.errorString())))
-        # tracing to locate the silent-after-connect problem
-        self._ws.binaryMessageReceived.connect(
-            lambda _b: dbg("binaryMessageReceived (unexpected!)"))
-        self._ws.stateChanged.connect(lambda st: dbg(f"stateChanged: {st}"))
-        try:
-            self._ws.sslErrors.connect(lambda errs: dbg(f"sslErrors: {[e.errorString() for e in errs]}"))
-        except Exception:
-            pass
+            lambda _err: dbg(f"errorOccurred: {self._ws.errorString()}"))
 
         self._reconnect = QTimer(self)
         self._reconnect.setSingleShot(True)
@@ -113,7 +106,16 @@ class AisStreamProvider(AisProvider):
             self._reconnect.start(RECONNECT_MS)  # auto-reconnect with backoff
 
     # --- message decoding (normalises to the base-class contract) --------
-    def _on_message(self, text):
+    def _on_text(self, text):
+        self._handle(text)
+
+    def _on_binary(self, data):
+        try:
+            self._handle(bytes(data).decode("utf-8", "replace"))
+        except Exception as exc:  # noqa: BLE001
+            dbg(f"binary decode error: {exc}")
+
+    def _handle(self, text):
         try:
             message = json.loads(text)
         except (ValueError, TypeError):
