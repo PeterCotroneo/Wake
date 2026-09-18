@@ -173,6 +173,9 @@ class VesselStore:
         """Apply buffered adds/updates to the layer in one pass. Main thread."""
         if not self._layer_valid() or (not self._pending_new and not self._pending_upd):
             return
+        QgsMessageLog.logMessage(
+            f"flush: +{len(self._pending_new)} new, ~{len(self._pending_upd)} upd",
+            "Wake", Qgis.MessageLevel.Info)
         dp = self._layer.dataProvider()
 
         # additions

@@ -11,6 +11,7 @@ Free service; the user supplies their own aisstream.io API key.
 import json
 
 from qgis.PyQt.QtCore import QUrl, QTimer
+from qgis.core import QgsMessageLog, Qgis
 
 # qgis.PyQt does not forward QtWebSockets, so import it from the Qt binding
 # directly (PyQt6 on QGIS 4 / Qt6, PyQt5 on QGIS 3 / Qt5).
@@ -87,6 +88,10 @@ class AisStreamProvider(AisProvider):
                 "PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
         }
         self._ws.sendTextMessage(json.dumps(subscription))
+        self._msg_count = 0
+        QgsMessageLog.logMessage(
+            f"connected; subscribed BoundingBoxes={subscription['BoundingBoxes']}",
+            "Wake", Qgis.MessageLevel.Info)
         self.status_changed.emit("Connected")
 
     def _on_disconnected(self):
@@ -101,6 +106,10 @@ class AisStreamProvider(AisProvider):
         except (ValueError, TypeError):
             return
         kind = message.get("MessageType")
+        self._msg_count = getattr(self, "_msg_count", 0) + 1
+        if self._msg_count <= 3 or self._msg_count % 50 == 0:
+            QgsMessageLog.logMessage(f"msg #{self._msg_count}: {kind}",
+                                     "Wake", Qgis.MessageLevel.Info)
         if kind == "ErrorMessage":
             self.error.emit(str(message.get("Message")))
             return
