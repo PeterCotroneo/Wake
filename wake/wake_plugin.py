@@ -339,6 +339,7 @@ class WakePlugin:
         bbox = self._bbox_wgs84()
         if bbox is not None:
             self.provider.update_area([bbox])
+            self.store.retain_within(bbox)  # drop vessels outside the new view
 
     def _on_tick(self):
         try:

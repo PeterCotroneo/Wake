@@ -375,3 +375,26 @@ class VesselStore:
 
     def count(self):
         return len(self._fid)
+
+    def retain_within(self, bbox):
+        """Drop vessels outside bbox (lat_min, lon_min, lat_max, lon_max) so the
+        map reflects the area currently being watched after a pan/zoom."""
+        if not self._layer_valid():
+            return
+        lat_min, lon_min, lat_max, lon_max = bbox
+        outside = []
+        for mmsi, rec in self._records.items():
+            try:
+                lat, lon = float(rec.get("lat")), float(rec.get("lon"))
+            except (TypeError, ValueError):
+                outside.append(mmsi)
+                continue
+            if not (lat_min <= lat <= lat_max and lon_min <= lon <= lon_max):
+                outside.append(mmsi)
+        fids = [self._fid[m] for m in outside if m in self._fid]
+        if fids:
+            self._layer.dataProvider().deleteFeatures(fids)
+            self._layer.triggerRepaint()
+        for mmsi in outside:
+            self._records.pop(mmsi, None)
+            self._fid.pop(mmsi, None)

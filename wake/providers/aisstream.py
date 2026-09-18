@@ -96,7 +96,8 @@ class AisStreamProvider(AisProvider):
             "APIKey": self._key,
             "BoundingBoxes": [[[b[0], b[1]], [b[2], b[3]]] for b in self._bboxes],
             "FilterMessageTypes": [
-                "PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
+                "PositionReport", "StandardClassBPositionReport",
+                "ShipStaticData", "StaticDataReport"],
         }
         self._ws.sendTextMessage(json.dumps(subscription))
         self._ws.flush()
@@ -175,3 +176,28 @@ class AisStreamProvider(AisProvider):
                 "beam": beam or None,
                 "draught": body.get("MaximumStaticDraught"),
             })
+        elif kind == "StaticDataReport":
+            # Class B static (two parts: ReportA=name, ReportB=type/callsign/size)
+            body = message.get("Message", {}).get("StaticDataReport", {})
+            report_a = body.get("ReportA") or {}
+            report_b = body.get("ReportB") or {}
+            dim = report_b.get("Dimension") or {}
+            length = (dim.get("A", 0) or 0) + (dim.get("B", 0) or 0)
+            beam = (dim.get("C", 0) or 0) + (dim.get("D", 0) or 0)
+            update = {
+                "mmsi": str(meta.get("MMSI") or body.get("UserID")),
+                "ship_class": "B",
+            }
+            name = (report_a.get("Name") or meta.get("ShipName") or "").strip()
+            if name:
+                update["name"] = name
+            if report_b.get("ShipType"):
+                update["type_code"] = report_b.get("ShipType")
+            callsign = (report_b.get("CallSign") or "").strip()
+            if callsign:
+                update["callsign"] = callsign
+            if length:
+                update["length"] = length
+            if beam:
+                update["beam"] = beam
+            self.vessel_update.emit(update)
