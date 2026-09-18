@@ -36,17 +36,63 @@ LAYER_NAME = "Wake — Live Vessels"
 _FIELDS = [
     ("mmsi", QVariant.String),
     ("name", QVariant.String),
-    ("ship_class", QVariant.String),
+    ("callsign", QVariant.String),
+    ("type", QVariant.String),
     ("type_group", QVariant.String),
+    ("status", QVariant.String),
     ("destination", QVariant.String),
-    ("cog", QVariant.Double),
     ("sog", QVariant.Double),
+    ("cog", QVariant.Double),
     ("heading", QVariant.Double),
-    ("rotation", QVariant.Double),
+    ("length_m", QVariant.Int),
+    ("beam_m", QVariant.Int),
+    ("draught_m", QVariant.Double),
+    ("imo", QVariant.Int),
     ("nav_status", QVariant.Int),
+    ("rotation", QVariant.Double),
+    ("ship_class", QVariant.String),
     ("last_seen", QVariant.String),
 ]
 _FIELD_INDEX = {name: i for i, (name, _t) in enumerate(_FIELDS)}
+
+_ALIASES = {
+    "mmsi": "MMSI", "name": "Name", "callsign": "Call sign", "type": "Ship type",
+    "type_group": "Category", "status": "Nav status", "destination": "Destination",
+    "sog": "Speed (kn)", "cog": "Course (°)", "heading": "Heading (°)",
+    "length_m": "Length (m)", "beam_m": "Beam (m)", "draught_m": "Draught (m)",
+    "imo": "IMO", "nav_status": "Nav code", "ship_class": "AIS class",
+    "last_seen": "Last seen (UTC)",
+}
+
+_MAP_TIP = (
+    "<b>[% \"name\" %]</b> &nbsp;<span style='color:gray'>MMSI [% \"mmsi\" %]</span><br/>"
+    "[% coalesce(\"type\",'Vessel') %][% CASE WHEN \"status\" IS NOT NULL AND \"status\" != '' "
+    "THEN ' · ' || \"status\" ELSE '' END %]<br/>"
+    "Speed [% coalesce(\"sog\",'?') %] kn · Course [% coalesce(\"cog\",'?') %]° · "
+    "Heading [% coalesce(\"heading\",'?') %]°<br/>"
+    "[% CASE WHEN \"destination\" IS NOT NULL AND \"destination\" != '' "
+    "THEN 'Destination: ' || \"destination\" || '<br/>' ELSE '' END %]"
+    "[% CASE WHEN \"length_m\" IS NOT NULL THEN 'Size ' || \"length_m\" || '×' || "
+    "coalesce(\"beam_m\",'?') || ' m' ELSE '' END %]"
+    "[% CASE WHEN \"draught_m\" IS NOT NULL THEN ' · Draught ' || \"draught_m\" || ' m' ELSE '' END %]"
+    "[% CASE WHEN \"callsign\" IS NOT NULL AND \"callsign\" != '' "
+    "THEN '<br/>Call sign ' || \"callsign\" ELSE '' END %]"
+    "[% CASE WHEN \"imo\" IS NOT NULL THEN ' · IMO ' || \"imo\" ELSE '' END %]"
+    "<br/><span style='color:gray'>Last seen [% coalesce(\"last_seen\",'—') %]</span>"
+)
+
+_TYPE_SPECIALS = {
+    30: "Fishing", 31: "Towing", 32: "Towing (long)", 33: "Dredging", 34: "Diving",
+    35: "Military", 36: "Sailing", 37: "Pleasure craft", 50: "Pilot",
+    51: "Search & rescue", 52: "Tug", 53: "Port tender", 55: "Law enforcement",
+    58: "Medical",
+}
+_NAV_STATUS = {
+    0: "Under way (engine)", 1: "At anchor", 2: "Not under command",
+    3: "Restricted manoeuvrability", 4: "Constrained by draught", 5: "Moored",
+    6: "Aground", 7: "Fishing", 8: "Under way (sailing)", 11: "Towing astern",
+    12: "Pushing ahead", 14: "AIS-SART",
+}
 
 
 def _type_group(type_code):
@@ -63,6 +109,35 @@ def _type_group(type_code):
     if code == 30:
         return "Fishing"
     return "Other"
+
+
+def _type_label(type_code):
+    try:
+        code = int(type_code)
+    except (TypeError, ValueError):
+        return None
+    if code in _TYPE_SPECIALS:
+        return _TYPE_SPECIALS[code]
+    if 20 <= code <= 29:
+        return "Wing-in-ground"
+    if 40 <= code <= 49:
+        return "High-speed craft"
+    if 60 <= code <= 69:
+        return "Passenger"
+    if 70 <= code <= 79:
+        return "Cargo"
+    if 80 <= code <= 89:
+        return "Tanker"
+    if 90 <= code <= 99:
+        return "Other"
+    return None
+
+
+def _nav_label(nav_code):
+    try:
+        return _NAV_STATUS.get(int(nav_code))
+    except (TypeError, ValueError):
+        return None
 
 
 def _rotation(rec):
@@ -96,6 +171,11 @@ class VesselStore:
         layer = QgsVectorLayer("Point?crs=EPSG:4326", LAYER_NAME, "memory")
         layer.dataProvider().addAttributes(fields.toList())
         layer.updateFields()
+        for name, alias in _ALIASES.items():
+            idx = layer.fields().indexOf(name)
+            if idx >= 0:
+                layer.setFieldAlias(idx, alias)
+        layer.setMapTipTemplate(_MAP_TIP)
         self._style(layer)
         QgsProject.instance().addMapLayer(layer)
         self._layer = layer
@@ -162,14 +242,21 @@ class VesselStore:
     def _attrs(self, rec):
         return {
             _FIELD_INDEX["name"]: rec.get("name", ""),
-            _FIELD_INDEX["ship_class"]: rec.get("ship_class", ""),
+            _FIELD_INDEX["callsign"]: rec.get("callsign", ""),
+            _FIELD_INDEX["type"]: _type_label(rec.get("type_code")),
             _FIELD_INDEX["type_group"]: _type_group(rec.get("type_code")),
+            _FIELD_INDEX["status"]: _nav_label(rec.get("nav_status")),
             _FIELD_INDEX["destination"]: rec.get("destination", ""),
-            _FIELD_INDEX["cog"]: rec.get("cog"),
             _FIELD_INDEX["sog"]: rec.get("sog"),
+            _FIELD_INDEX["cog"]: rec.get("cog"),
             _FIELD_INDEX["heading"]: rec.get("heading"),
-            _FIELD_INDEX["rotation"]: _rotation(rec),
+            _FIELD_INDEX["length_m"]: rec.get("length"),
+            _FIELD_INDEX["beam_m"]: rec.get("beam"),
+            _FIELD_INDEX["draught_m"]: rec.get("draught"),
+            _FIELD_INDEX["imo"]: rec.get("imo"),
             _FIELD_INDEX["nav_status"]: rec.get("nav_status"),
+            _FIELD_INDEX["rotation"]: _rotation(rec),
+            _FIELD_INDEX["ship_class"]: rec.get("ship_class", ""),
             _FIELD_INDEX["last_seen"]: rec.get("last_seen", ""),
         }
 

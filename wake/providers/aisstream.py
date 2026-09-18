@@ -145,9 +145,18 @@ class AisStreamProvider(AisProvider):
             })
         elif kind == "ShipStaticData":
             body = message.get("Message", {}).get("ShipStaticData", {})
+            dim = body.get("Dimension") or {}
+            imo = body.get("ImoNumber") or 0
+            length = (dim.get("A", 0) or 0) + (dim.get("B", 0) or 0)
+            beam = (dim.get("C", 0) or 0) + (dim.get("D", 0) or 0)
             self.vessel_update.emit({
                 "mmsi": str(meta.get("MMSI") or body.get("UserID")),
                 "name": (meta.get("ShipName") or body.get("Name") or "").strip(),
                 "type_code": body.get("Type"),
                 "destination": (body.get("Destination") or "").strip(),
+                "callsign": (body.get("CallSign") or "").strip(),
+                "imo": imo if imo else None,
+                "length": length or None,
+                "beam": beam or None,
+                "draught": body.get("MaximumStaticDraught"),
             })
