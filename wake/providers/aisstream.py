@@ -42,6 +42,7 @@ class AisStreamProvider(AisProvider):
         self._key = api_key
         self._bboxes = []
         self._want = False  # whether we should be connected (drives reconnect)
+        self._connected = False
         self._ws = None
         self._reconnect = None
         if QWebSocket is None:
@@ -84,22 +85,32 @@ class AisStreamProvider(AisProvider):
         self.status_changed.emit("Connecting…")
         self._ws.open(QUrl(STREAM_URL))
 
-    def _on_connected(self):
+    def _send_subscription(self):
         subscription = {
             "APIKey": self._key,
             "BoundingBoxes": [[[b[0], b[1]], [b[2], b[3]]] for b in self._bboxes],
             "FilterMessageTypes": [
                 "PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
         }
-        payload = json.dumps(subscription)
-        sent = self._ws.sendTextMessage(payload)
+        self._ws.sendTextMessage(json.dumps(subscription))
         self._ws.flush()
+        dbg(f"sent subscription BoundingBoxes={subscription['BoundingBoxes']}")
+
+    def _on_connected(self):
+        self._connected = True
         self._msg_count = 0
-        dbg(f"_on_connected: sent {sent} bytes (payload {len(payload)}); "
-            f"state={self._ws.state()}; sub={subscription['BoundingBoxes']}")
+        self._send_subscription()
         self.status_changed.emit("Connected")
 
+    def update_area(self, bboxes):
+        """Re-subscribe to a new area on the live socket (no reconnect)."""
+        self._bboxes = list(bboxes)
+        if self._connected and self._ws is not None:
+            self._send_subscription()
+            dbg("area updated on live connection")
+
     def _on_disconnected(self):
+        self._connected = False
         dbg(f"_on_disconnected (close code={self._ws.closeCode()} reason={self._ws.closeReason()!r})")
         self.status_changed.emit("Disconnected")
         if self._want:

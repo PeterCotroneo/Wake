@@ -19,9 +19,9 @@ from qgis.core import (
     QgsPointXY,
     QgsProject,
     QgsMarkerSymbol,
-    QgsSingleSymbolRenderer,
+    QgsCategorizedSymbolRenderer,
+    QgsRendererCategory,
     QgsProperty,
-    QgsSymbolLayer,
     QgsPalLayerSettings,
     QgsVectorLayerSimpleLabeling,
     QgsMessageLog,
@@ -95,6 +95,19 @@ _NAV_STATUS = {
 }
 
 
+# category -> colour (also the order shown in the legend)
+CATEGORY_COLORS = [
+    ("Passenger", "#1f77b4"),
+    ("Cargo", "#2ca02c"),
+    ("Tanker", "#d62728"),
+    ("Fishing", "#ff7f0e"),
+    ("Sailing", "#9467bd"),
+    ("High-speed", "#17becf"),
+    ("Special", "#8c564b"),
+    ("Other", "#7f7f7f"),
+]
+
+
 def _type_group(type_code):
     try:
         code = int(type_code)
@@ -108,6 +121,12 @@ def _type_group(type_code):
         return "Tanker"
     if code == 30:
         return "Fishing"
+    if code in (36, 37):
+        return "Sailing"
+    if 40 <= code <= 49:
+        return "High-speed"
+    if 50 <= code <= 59:
+        return "Special"
     return "Other"
 
 
@@ -222,20 +241,14 @@ class VesselStore:
 
     def _style(self, layer):
         try:
-            symbol = QgsMarkerSymbol.createSimple(
-                {"name": "triangle", "size": "4", "color": "gray",
-                 "outline_color": "black", "outline_width": "0.2"})
-            symbol.setDataDefinedAngle(QgsProperty.fromField("rotation"))
-            color_expr = (
-                "CASE"
-                " WHEN \"type_group\"='Tanker' THEN '#d62728'"
-                " WHEN \"type_group\"='Cargo' THEN '#2ca02c'"
-                " WHEN \"type_group\"='Passenger' THEN '#1f77b4'"
-                " WHEN \"type_group\"='Fishing' THEN '#ff7f0e'"
-                " ELSE '#7f7f7f' END")
-            symbol.symbolLayer(0).setDataDefinedProperty(
-                QgsSymbolLayer.PropertyFillColor, QgsProperty.fromExpression(color_expr))
-            layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+            categories = []
+            for group, color in CATEGORY_COLORS:
+                sym = QgsMarkerSymbol.createSimple(
+                    {"name": "triangle", "size": "4", "color": color,
+                     "outline_color": "black", "outline_width": "0.2"})
+                sym.setDataDefinedAngle(QgsProperty.fromField("rotation"))
+                categories.append(QgsRendererCategory(group, sym, group))
+            layer.setRenderer(QgsCategorizedSymbolRenderer("type_group", categories))
             pal = QgsPalLayerSettings()
             pal.fieldName = "name"
             layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))

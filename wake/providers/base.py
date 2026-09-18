@@ -48,3 +48,8 @@ class AisProvider(QObject):
     def stop(self):
         """Stop streaming and release the connection."""
         raise NotImplementedError
+
+    def update_area(self, bboxes):
+        """Change the tracked area on a live connection, if the provider
+        supports it (default: no-op). Same bbox format as start()."""
+        pass

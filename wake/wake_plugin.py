@@ -90,6 +90,8 @@ class WakePlugin:
         self._last_status = "Idle"
         self._running = False
         self.log_view = None
+        self.rb_view = None
+        self._extent_timer = None
 
     # --- plugin lifecycle ------------------------------------------------
     def initGui(self):
@@ -99,10 +101,22 @@ class WakePlugin:
         self.action.toggled.connect(self._toggle_dock)
         self.iface.addToolBarIcon(self.action)
         self.iface.addPluginToMenu("Wake", self.action)
+        # re-subscribe to the new view when the map moves (debounced)
+        self._extent_timer = QTimer()
+        self._extent_timer.setSingleShot(True)
+        self._extent_timer.setInterval(1500)
+        self._extent_timer.timeout.connect(self._refresh_area)
+        self.iface.mapCanvas().extentsChanged.connect(self._on_extent_changed)
 
     def unload(self):
         clear_sinks()
         self.log_view = None
+        try:
+            self.iface.mapCanvas().extentsChanged.disconnect(self._on_extent_changed)
+        except (TypeError, RuntimeError):
+            pass
+        if self._extent_timer is not None:
+            self._extent_timer.stop()
         self._stop()
         if self.rect_tool is not None:
             self.iface.mapCanvas().unsetMapTool(self.rect_tool)
@@ -309,6 +323,21 @@ class WakePlugin:
         self._update_status()
 
     # --- runtime ---------------------------------------------------------
+    def _on_extent_changed(self):
+        if (self._running and self._extent_timer is not None
+                and self.rb_view is not None and self.rb_view.isChecked()):
+            self._extent_timer.start()  # debounce; fires ~1.5s after panning stops
+
+    def _refresh_area(self):
+        if not self._running or self.provider is None:
+            return
+        if self.rb_view is None or not self.rb_view.isChecked():
+            return
+        bbox = self._bbox_wgs84()
+        if bbox is not None:
+            self.provider.update_area([bbox])
+            dbg(f"_refresh_area -> {bbox}")
+
     def _on_tick(self):
         try:
             self.store.flush()
