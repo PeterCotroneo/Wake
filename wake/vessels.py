@@ -29,6 +29,7 @@ from qgis.core import (
 )
 
 from ._debug import dbg
+from .mid import country_for_mmsi
 
 LAYER_NAME = "Wake — Live Vessels"
 
@@ -36,6 +37,7 @@ LAYER_NAME = "Wake — Live Vessels"
 _FIELDS = [
     ("mmsi", QVariant.String),
     ("name", QVariant.String),
+    ("flag", QVariant.String),
     ("callsign", QVariant.String),
     ("type", QVariant.String),
     ("type_group", QVariant.String),
@@ -56,7 +58,8 @@ _FIELDS = [
 _FIELD_INDEX = {name: i for i, (name, _t) in enumerate(_FIELDS)}
 
 _ALIASES = {
-    "mmsi": "MMSI", "name": "Name", "callsign": "Call sign", "type": "Ship type",
+    "mmsi": "MMSI", "name": "Name", "flag": "Flag / Country",
+    "callsign": "Call sign", "type": "Ship type",
     "type_group": "Category", "status": "Nav status", "destination": "Destination",
     "sog": "Speed (kn)", "cog": "Course (°)", "heading": "Heading (°)",
     "length_m": "Length (m)", "beam_m": "Beam (m)", "draught_m": "Draught (m)",
@@ -65,7 +68,8 @@ _ALIASES = {
 }
 
 _MAP_TIP = (
-    "<b>[% \"name\" %]</b> &nbsp;<span style='color:gray'>MMSI [% \"mmsi\" %]</span><br/>"
+    "<b>[% \"name\" %]</b> &nbsp;<span style='color:gray'>MMSI [% \"mmsi\" %]</span>"
+    "[% CASE WHEN \"flag\" IS NOT NULL AND \"flag\" != '' THEN ' · ' || \"flag\" ELSE '' END %]<br/>"
     "[% coalesce(\"type\",'Vessel') %][% CASE WHEN \"status\" IS NOT NULL AND \"status\" != '' "
     "THEN ' · ' || \"status\" ELSE '' END %]<br/>"
     "Speed [% coalesce(\"sog\",'?') %] kn · Course [% coalesce(\"cog\",'?') %]° · "
@@ -275,6 +279,7 @@ class VesselStore:
     def _attrs(self, rec):
         return {
             _FIELD_INDEX["name"]: rec.get("name", ""),
+            _FIELD_INDEX["flag"]: country_for_mmsi(rec.get("mmsi")),
             _FIELD_INDEX["callsign"]: rec.get("callsign", ""),
             _FIELD_INDEX["type"]: _type_label(rec.get("type_code")),
             _FIELD_INDEX["type_group"]: _type_group(rec.get("type_code")),
