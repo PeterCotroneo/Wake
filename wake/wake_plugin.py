@@ -190,20 +190,22 @@ class WakePlugin:
 
         self.lbl_status = QLabel("Idle")
         layout.addWidget(self.lbl_status)
+        layout.addStretch(1)   # absorb extra space so controls stay tight at top
 
-        # collapsible debug log (closed by default)
+        # collapsible debug log (closed by default), pinned at the bottom
         log_box = QgsCollapsibleGroupBox("Debug Log")
         log_box.setCollapsed(True)
         log_layout = QVBoxLayout(log_box)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(500)
+        self.log_view.setMinimumHeight(120)
         self.log_view.setPlaceholderText("Activity appears here while tracking.")
         log_layout.addWidget(self.log_view)
         btn_clear = QPushButton("Clear log")
         btn_clear.clicked.connect(self.log_view.clear)
         log_layout.addWidget(btn_clear)
-        layout.addWidget(log_box, 1)
+        layout.addWidget(log_box)
 
         clear_sinks()
         add_sink(self._log_line)
