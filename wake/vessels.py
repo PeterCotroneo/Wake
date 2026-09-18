@@ -28,6 +28,8 @@ from qgis.core import (
     Qgis,
 )
 
+from ._debug import dbg
+
 LAYER_NAME = "Wake — Live Vessels"
 
 # ordered layer fields
@@ -142,6 +144,8 @@ class VesselStore:
     # --- ingest / flush --------------------------------------------------
     def ingest(self, vessel):
         mmsi = vessel.get("mmsi")
+        if len(self._records) < 3:
+            dbg(f"ingest: mmsi={mmsi} lat={vessel.get('lat')} lon={vessel.get('lon')}")
         if not mmsi:
             return
         rec = self._records.setdefault(mmsi, {})
@@ -173,9 +177,7 @@ class VesselStore:
         """Apply buffered adds/updates to the layer in one pass. Main thread."""
         if not self._layer_valid() or (not self._pending_new and not self._pending_upd):
             return
-        QgsMessageLog.logMessage(
-            f"flush: +{len(self._pending_new)} new, ~{len(self._pending_upd)} upd",
-            "Wake", Qgis.MessageLevel.Info)
+        dbg(f"flush: +{len(self._pending_new)} new, ~{len(self._pending_upd)} upd")
         dp = self._layer.dataProvider()
 
         # additions
@@ -222,6 +224,7 @@ class VesselStore:
 
         self._layer.updateExtents()
         self._layer.triggerRepaint()
+        dbg(f"flush done: layer now has {self._layer.featureCount()} features")
 
     def expire(self, max_age_seconds):
         if not self._layer_valid():

@@ -22,6 +22,7 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 
 from .providers import PROVIDERS
 from .vessels import VesselStore
+from ._debug import dbg
 
 FLUSH_MS = 1000            # batch map updates once a second
 STALE_SECONDS = 600        # drop vessels not heard from in 10 minutes
@@ -249,6 +250,7 @@ class WakePlugin:
             bar.pushWarning("Wake", "Draw an area on the map first.")
             return
 
+        dbg(f"_start: provider={pid} bbox(lat_min,lon_min,lat_max,lon_max)={bbox}")
         self.store.ensure_layer()
         self.provider = cls(api_key) if cls.requires_api_key else cls()
         self.provider.vessel_update.connect(self.store.ingest)
@@ -285,8 +287,12 @@ class WakePlugin:
 
     # --- runtime ---------------------------------------------------------
     def _on_tick(self):
-        self.store.flush()
-        self.store.expire(STALE_SECONDS)
+        try:
+            self.store.flush()
+            self.store.expire(STALE_SECONDS)
+        except Exception as exc:  # noqa: BLE001
+            import traceback
+            dbg(f"_on_tick ERROR: {exc}\n{traceback.format_exc()}")
         self._update_status()
 
     def _on_status(self, text):
