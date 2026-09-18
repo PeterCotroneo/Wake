@@ -148,7 +148,7 @@ class WakePlugin:
 
         intro = QLabel(
             "Watch live vessel traffic. Pick an area, then Start — ships stream "
-            "onto the map and move in real time. Live only; no history."
+            "onto the map and move in real time."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -160,6 +160,7 @@ class WakePlugin:
         self.cbo_provider = QComboBox()
         for pid, cls in PROVIDERS.items():
             self.cbo_provider.addItem(cls.label, pid)
+        self.cbo_provider.currentIndexChanged.connect(self._on_provider_switched)
         row.addWidget(self.cbo_provider, 1)
         self.btn_config = QPushButton("Configure…")
         self.btn_config.clicked.connect(self._on_configure)
@@ -190,9 +191,8 @@ class WakePlugin:
 
         self.lbl_status = QLabel("Idle")
         layout.addWidget(self.lbl_status)
-        layout.addStretch(1)   # absorb extra space so controls stay tight at top
 
-        # collapsible debug log (closed by default), pinned at the bottom
+        # collapsible activity log directly under the status (no gap)
         log_box = QgsCollapsibleGroupBox("Activity")
         log_box.setCollapsed(True)
         log_layout = QVBoxLayout(log_box)
@@ -206,6 +206,7 @@ class WakePlugin:
         btn_clear.clicked.connect(self.log_view.clear)
         log_layout.addWidget(btn_clear)
         layout.addWidget(log_box)
+        layout.addStretch(1)   # any extra space collapses at the very bottom
 
         clear_sinks()
         add_sink(self._log_line)
@@ -221,6 +222,12 @@ class WakePlugin:
         cls = PROVIDERS.get(self.cbo_provider.currentData())
         if cls is not None:
             ProviderConfigDialog(cls, self.iface.mainWindow()).exec()
+
+    def _on_provider_switched(self):
+        # if already tracking, restart on the newly selected provider
+        if self._running:
+            self._stop()
+            self._start()
 
     def _on_area_mode_changed(self, *_):
         if self.rb_draw.isChecked():

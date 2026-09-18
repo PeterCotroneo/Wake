@@ -213,9 +213,9 @@ class OpenWatersProvider(AisStreamLikeProvider):
     id = "openwaters"
     label = "Open Waters (aiscast)"
     stream_url = "wss://ais.openwaters.io/v0/stream"
-    help_text = ('Open, volunteer-fed AIS network (aisstream-compatible). Get a '
-                 'free token at <a href="https://openwatersio.github.io/aiscast/'
-                 'token.html">openwatersio.github.io/aiscast/token.html</a> '
+    help_text = ('Open, volunteer-fed AIS network. Get a free token at '
+                 '<a href="https://openwatersio.github.io/aiscast/token.html">'
+                 'openwatersio.github.io/aiscast/token.html</a> '
                  '(personal tier: 20°×20° area).')
     config_fields = [
         {"key": "api_key", "label": "Token", "secret": True,
