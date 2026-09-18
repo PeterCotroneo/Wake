@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="wk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f6feb"/>
+      <stop offset="1" stop-color="#0a3d7a"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="url(#wk)"/>
+  <!-- wake trail -->
+  <path d="M14 44 Q28 40 40 26" fill="none" stroke="#ffffff" stroke-width="3"
+        stroke-linecap="round" stroke-opacity="0.55"/>
+  <path d="M16 50 Q30 46 42 30" fill="none" stroke="#ffffff" stroke-width="3"
+        stroke-linecap="round" stroke-opacity="0.3"/>
+  <!-- vessel marker heading up-right -->
+  <path d="M44 14 L52 34 L44 30 L36 34 Z" fill="#ffd54a" stroke="#ffffff" stroke-width="1.5"
+        stroke-linejoin="round"/>
+</svg>
