@@ -395,7 +395,9 @@ class VesselStore:
             try:
                 lat, lon = float(rec.get("lat")), float(rec.get("lon"))
             except (TypeError, ValueError):
-                outside.append(mmsi)
+                # No position yet (e.g. a static/type message arrived before the
+                # first position). Keep it — it isn't on the map, and dropping it
+                # would discard the cached type before the position lands.
                 continue
             if not (lat_min <= lat <= lat_max and lon_min <= lon <= lon_max):
                 outside.append(mmsi)
