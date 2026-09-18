@@ -344,6 +344,12 @@ class WakePlugin:
     def _on_tick(self):
         try:
             self.store.flush()
+            # Clip to the area being watched every tick, not just on pan/zoom, so
+            # the layer never holds vessels outside the current view (e.g. left
+            # over from a wider extent) and the count stays honest to the frame.
+            bbox = self._bbox_wgs84()
+            if bbox is not None:
+                self.store.retain_within(bbox)
             self.store.expire(STALE_SECONDS)
         except Exception as exc:  # noqa: BLE001
             dbg(f"Update error: {exc}")
