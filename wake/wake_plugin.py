@@ -19,7 +19,7 @@ from qgis.core import (
     QgsSettings, QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsRectangle, QgsPointXY, QgsWkbTypes, QgsMessageLog, Qgis,
 )
-from qgis.gui import QgsMapTool, QgsRubberBand
+from qgis.gui import QgsMapTool, QgsRubberBand, QgsCollapsibleGroupBox
 
 from .providers import PROVIDERS
 from .vessels import VesselStore
@@ -191,13 +191,14 @@ class WakePlugin:
         self.lbl_status = QLabel("Idle")
         layout.addWidget(self.lbl_status)
 
-        # temporary in-panel log
-        log_box = QGroupBox("Log")
+        # collapsible debug log (closed by default)
+        log_box = QgsCollapsibleGroupBox("Debug Log")
+        log_box.setCollapsed(True)
         log_layout = QVBoxLayout(log_box)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(500)
-        self.log_view.setPlaceholderText("Diagnostic output appears here once you Start.")
+        self.log_view.setPlaceholderText("Activity appears here while tracking.")
         log_layout.addWidget(self.log_view)
         btn_clear = QPushButton("Clear log")
         btn_clear.clicked.connect(self.log_view.clear)
@@ -287,7 +288,7 @@ class WakePlugin:
             bar.pushWarning("Wake", "Draw an area on the map first.")
             return
 
-        dbg(f"_start: provider={pid} bbox(lat_min,lon_min,lat_max,lon_max)={bbox}")
+        dbg(f"Started tracking with {cls.label.split(' (')[0]}.")
         self.store.ensure_layer()
         self.provider = cls(api_key) if cls.requires_api_key else cls()
         self.provider.vessel_update.connect(self.store.ingest)
@@ -336,15 +337,13 @@ class WakePlugin:
         bbox = self._bbox_wgs84()
         if bbox is not None:
             self.provider.update_area([bbox])
-            dbg(f"_refresh_area -> {bbox}")
 
     def _on_tick(self):
         try:
             self.store.flush()
             self.store.expire(STALE_SECONDS)
         except Exception as exc:  # noqa: BLE001
-            import traceback
-            dbg(f"_on_tick ERROR: {exc}\n{traceback.format_exc()}")
+            dbg(f"Update error: {exc}")
         self._update_status()
 
     def _on_status(self, text):

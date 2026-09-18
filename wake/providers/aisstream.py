@@ -32,6 +32,12 @@ RECONNECT_MS = 3000
 _POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
 
 
+def _fmt_area(bboxes):
+    """Human-readable bbox list for the log."""
+    return "; ".join(
+        f"lat {b[0]:.2f}…{b[2]:.2f}, lon {b[1]:.2f}…{b[3]:.2f}" for b in bboxes)
+
+
 class AisStreamProvider(AisProvider):
     id = "aisstream"
     label = "aisstream.io (free — account & API key required)"
@@ -55,7 +61,7 @@ class AisStreamProvider(AisProvider):
         self._ws.textMessageReceived.connect(self._on_text)
         self._ws.binaryMessageReceived.connect(self._on_binary)
         self._ws.errorOccurred.connect(
-            lambda _err: dbg(f"errorOccurred: {self._ws.errorString()}"))
+            lambda _err: dbg(f"Connection error: {self._ws.errorString()}"))
 
         self._reconnect = QTimer(self)
         self._reconnect.setSingleShot(True)
@@ -94,11 +100,12 @@ class AisStreamProvider(AisProvider):
         }
         self._ws.sendTextMessage(json.dumps(subscription))
         self._ws.flush()
-        dbg(f"sent subscription BoundingBoxes={subscription['BoundingBoxes']}")
+        dbg(f"Watching area — {_fmt_area(self._bboxes)}")
 
     def _on_connected(self):
         self._connected = True
         self._msg_count = 0
+        dbg("Connected to aisstream.io")
         self._send_subscription()
         self.status_changed.emit("Connected")
 
@@ -106,12 +113,12 @@ class AisStreamProvider(AisProvider):
         """Re-subscribe to a new area on the live socket (no reconnect)."""
         self._bboxes = list(bboxes)
         if self._connected and self._ws is not None:
+            dbg("Map moved — updating watch area")
             self._send_subscription()
-            dbg("area updated on live connection")
 
     def _on_disconnected(self):
         self._connected = False
-        dbg(f"_on_disconnected (close code={self._ws.closeCode()} reason={self._ws.closeReason()!r})")
+        dbg("Connection dropped — reconnecting…")
         self.status_changed.emit("Disconnected")
         if self._want:
             self._reconnect.start(RECONNECT_MS)  # auto-reconnect with backoff
@@ -132,9 +139,6 @@ class AisStreamProvider(AisProvider):
         except (ValueError, TypeError):
             return
         kind = message.get("MessageType")
-        self._msg_count = getattr(self, "_msg_count", 0) + 1
-        if self._msg_count <= 3 or self._msg_count % 50 == 0:
-            dbg(f"_on_message #{self._msg_count}: {kind}")
         if kind == "ErrorMessage":
             self.error.emit(str(message.get("Message")))
             return

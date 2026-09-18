@@ -259,8 +259,6 @@ class VesselStore:
     # --- ingest / flush --------------------------------------------------
     def ingest(self, vessel):
         mmsi = vessel.get("mmsi")
-        if len(self._records) < 3:
-            dbg(f"ingest: mmsi={mmsi} lat={vessel.get('lat')} lon={vessel.get('lon')}")
         if not mmsi:
             return
         rec = self._records.setdefault(mmsi, {})
@@ -299,7 +297,7 @@ class VesselStore:
         """Apply buffered adds/updates to the layer in one pass. Main thread."""
         if not self._layer_valid() or (not self._pending_new and not self._pending_upd):
             return
-        dbg(f"flush: +{len(self._pending_new)} new, ~{len(self._pending_upd)} upd")
+        n_new = len(self._pending_new)
         dp = self._layer.dataProvider()
 
         # additions
@@ -346,7 +344,8 @@ class VesselStore:
 
         self._layer.updateExtents()
         self._layer.triggerRepaint()
-        dbg(f"flush done: layer now has {self._layer.featureCount()} features")
+        if n_new:
+            dbg(f"+{n_new} new vessel(s) · {self._layer.featureCount()} on the map")
 
     def expire(self, max_age_seconds):
         if not self._layer_valid():
@@ -358,6 +357,7 @@ class VesselStore:
         if fids:
             self._layer.dataProvider().deleteFeatures(fids)
             self._layer.triggerRepaint()
+            dbg(f"removed {len(fids)} vessel(s) not seen recently")
         for mmsi in stale:
             self._records.pop(mmsi, None)
             self._fid.pop(mmsi, None)
