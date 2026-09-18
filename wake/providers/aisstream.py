@@ -52,7 +52,16 @@ class AisStreamProvider(AisProvider):
         self._ws.disconnected.connect(self._on_disconnected)
         self._ws.textMessageReceived.connect(self._on_message)
         self._ws.errorOccurred.connect(
-            lambda _err: self.error.emit(self._ws.errorString()))
+            lambda _err: (dbg(f"errorOccurred: {self._ws.errorString()}"),
+                          self.error.emit(self._ws.errorString())))
+        # tracing to locate the silent-after-connect problem
+        self._ws.binaryMessageReceived.connect(
+            lambda _b: dbg("binaryMessageReceived (unexpected!)"))
+        self._ws.stateChanged.connect(lambda st: dbg(f"stateChanged: {st}"))
+        try:
+            self._ws.sslErrors.connect(lambda errs: dbg(f"sslErrors: {[e.errorString() for e in errs]}"))
+        except Exception:
+            pass
 
         self._reconnect = QTimer(self)
         self._reconnect.setSingleShot(True)
@@ -89,12 +98,16 @@ class AisStreamProvider(AisProvider):
             "FilterMessageTypes": [
                 "PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
         }
-        self._ws.sendTextMessage(json.dumps(subscription))
+        payload = json.dumps(subscription)
+        sent = self._ws.sendTextMessage(payload)
+        self._ws.flush()
         self._msg_count = 0
-        dbg(f"_on_connected: sent subscription BoundingBoxes={subscription['BoundingBoxes']}")
+        dbg(f"_on_connected: sent {sent} bytes (payload {len(payload)}); "
+            f"state={self._ws.state()}; sub={subscription['BoundingBoxes']}")
         self.status_changed.emit("Connected")
 
     def _on_disconnected(self):
+        dbg(f"_on_disconnected (close code={self._ws.closeCode()} reason={self._ws.closeReason()!r})")
         self.status_changed.emit("Disconnected")
         if self._want:
             self._reconnect.start(RECONNECT_MS)  # auto-reconnect with backoff
