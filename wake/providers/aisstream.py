@@ -8,6 +8,7 @@ QWebSocket — no external dependency.
 """
 
 import json
+import time
 
 from qgis.PyQt.QtCore import QUrl, QTimer
 
@@ -24,6 +25,8 @@ from .base import AisProvider
 from .._debug import dbg
 
 RECONNECT_MS = 3000
+WATCHDOG_MS = 30000        # how often to check the stream is still alive
+SILENCE_LIMIT_S = 120      # no message for this long => assume a silent death
 _POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
 
 
@@ -46,6 +49,8 @@ class AisStreamLikeProvider(AisProvider):
         self._connected = False
         self._ws = None
         self._reconnect = None
+        self._watchdog = None
+        self._last_rx = 0.0  # monotonic time of the last message received
         if QWebSocket is None:
             return
 
@@ -54,12 +59,19 @@ class AisStreamLikeProvider(AisProvider):
         self._ws.disconnected.connect(self._on_disconnected)
         self._ws.textMessageReceived.connect(self._on_text)
         self._ws.binaryMessageReceived.connect(self._on_binary)
-        self._ws.errorOccurred.connect(
-            lambda _err: dbg(f"Connection error: {self._ws.errorString()}"))
+        self._ws.errorOccurred.connect(self._on_error)
 
         self._reconnect = QTimer(self)
         self._reconnect.setSingleShot(True)
         self._reconnect.timeout.connect(self._open)
+
+        # Watchdog: sockets often die *silently* after a laptop sleep or network
+        # change — no disconnected/error signal fires, so we'd never reconnect and
+        # the map would slowly empty. If no message arrives for SILENCE_LIMIT_S
+        # while we still want data, force a fresh connection.
+        self._watchdog = QTimer(self)
+        self._watchdog.setInterval(WATCHDOG_MS)
+        self._watchdog.timeout.connect(self._check_alive)
 
     # --- AisProvider interface ------------------------------------------
     def start(self, bboxes):
@@ -72,11 +84,15 @@ class AisStreamLikeProvider(AisProvider):
         self._bboxes = list(bboxes)
         self._want = True
         self._open()
+        if self._watchdog is not None:
+            self._watchdog.start()
 
     def stop(self):
         self._want = False
         if self._reconnect is not None:
             self._reconnect.stop()
+        if self._watchdog is not None:
+            self._watchdog.stop()
         if self._ws is not None:
             self._ws.close()
 
@@ -90,8 +106,28 @@ class AisStreamLikeProvider(AisProvider):
     def _open(self):
         if not self._want:
             return
+        # abandon any half-open socket before reopening (silent-death recovery)
+        if self._ws is not None:
+            self._ws.abort()
+        self._last_rx = time.monotonic()  # grace period before the watchdog bites
         self.status_changed.emit("Connecting…")
         self._ws.open(QUrl(self.stream_url))
+
+    def _check_alive(self):
+        if not self._want or self._reconnect.isActive():
+            return
+        if time.monotonic() - self._last_rx > SILENCE_LIMIT_S:
+            dbg("No data for a while — reconnecting…")
+            self._connected = False
+            self.status_changed.emit("Reconnecting…")
+            self._open()
+
+    def _on_error(self, _err):
+        dbg(f"Connection error: {self._ws.errorString()}")
+        # errorOccurred can fire without a following disconnected signal, so
+        # schedule our own reconnect rather than waiting for one that may not come.
+        if self._want and not self._reconnect.isActive():
+            self._reconnect.start(RECONNECT_MS)
 
     def _send_subscription(self):
         subscription = {
@@ -107,6 +143,7 @@ class AisStreamLikeProvider(AisProvider):
 
     def _on_connected(self):
         self._connected = True
+        self._last_rx = time.monotonic()
         dbg(f"Connected to {self.label}")
         self._send_subscription()
         self.status_changed.emit("Connected")
@@ -129,6 +166,7 @@ class AisStreamLikeProvider(AisProvider):
             dbg(f"decode error: {exc}")
 
     def _handle(self, text):
+        self._last_rx = time.monotonic()  # proof the stream is alive
         try:
             message = json.loads(text)
         except (ValueError, TypeError):
