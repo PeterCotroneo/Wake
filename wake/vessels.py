@@ -112,6 +112,12 @@ CATEGORY_COLORS = [
     ("Unknown", "#b0b0b0"),
 ]
 
+# Identity fields that come from (infrequent) static messages and don't change
+# for a vessel — remembered for the whole session so a returning vessel keeps
+# its type/name instead of resetting to Unknown. See VesselStore._static_cache.
+_STATIC_KEYS = ("name", "callsign", "type_code", "destination",
+                "imo", "length", "beam", "draught", "ship_class")
+
 
 def _type_group(type_code):
     if type_code is None:
@@ -186,6 +192,12 @@ class VesselStore:
         self._fid = {}       # mmsi -> feature id in the layer
         self._pending_new = set()
         self._pending_upd = set()
+        # Session-long memory of each vessel's static/identity fields (type,
+        # name, dimensions…). Static messages broadcast only every ~6 min, so a
+        # vessel that leaves the view and returns, or is expired, would otherwise
+        # reset to Unknown until its next static. This keeps learned types sticky.
+        # Plain scalars keyed by MMSI — small and never touches the layer.
+        self._static_cache = {}
 
     # --- layer lifecycle -------------------------------------------------
     def ensure_layer(self):
@@ -268,10 +280,22 @@ class VesselStore:
         mmsi = vessel.get("mmsi")
         if not mmsi:
             return
-        rec = self._records.setdefault(mmsi, {})
+        rec = self._records.get(mmsi)
+        if rec is None:
+            # New (or re-appearing) vessel — seed it with any static/identity we
+            # already learned this session, so it isn't Unknown while we wait up
+            # to ~6 min for its next static broadcast.
+            rec = dict(self._static_cache.get(mmsi, {}))
+            self._records[mmsi] = rec
         for key, val in vessel.items():
             if val is not None:
                 rec[key] = val
+        # Remember this vessel's static/identity fields for the whole session.
+        cache = self._static_cache.setdefault(mmsi, {})
+        for key in _STATIC_KEYS:
+            val = vessel.get(key)
+            if val is not None:
+                cache[key] = val
         rec["_last_update"] = time.time()
         has_pos = rec.get("lat") is not None and rec.get("lon") is not None
         if mmsi in self._fid:
