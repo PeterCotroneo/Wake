@@ -197,7 +197,7 @@ class WakePlugin:
         layout.addWidget(self.lbl_status)
 
         # collapsible activity log directly under the status (no gap)
-        log_box = QgsCollapsibleGroupBox("Activity")
+        log_box = QgsCollapsibleGroupBox("Activity Log")
         log_box.setCollapsed(True)
         log_layout = QVBoxLayout(log_box)
         self.log_view = QPlainTextEdit()
