@@ -21,6 +21,7 @@ from qgis.core import (
     QgsMarkerSymbol,
     QgsCategorizedSymbolRenderer,
     QgsRendererCategory,
+    QgsPointClusterRenderer,
     QgsProperty,
     QgsPalLayerSettings,
     QgsVectorLayerSimpleLabeling,
@@ -267,7 +268,20 @@ class VesselStore:
                      "outline_color": "black", "outline_width": "0.2"})
                 sym.setDataDefinedAngle(QgsProperty.fromField("rotation"))
                 categories.append(QgsRendererCategory(group, sym, group))
-            layer.setRenderer(QgsCategorizedSymbolRenderer("type_group", categories))
+            by_type = QgsCategorizedSymbolRenderer("type_group", categories)
+            # Wrap the type renderer in a point-cluster renderer so vessels that
+            # overlap on screen (e.g. dozens moored in a harbour) collapse into a
+            # single badge showing the count, and fan back out into individual
+            # typed markers as you zoom in. Tolerance is screen-based so it tracks
+            # zoom. The default cluster symbol carries the count label.
+            cluster = QgsPointClusterRenderer()
+            cluster.setEmbeddedRenderer(by_type)
+            cluster.setTolerance(3.5)
+            try:
+                cluster.setToleranceUnit(Qgis.RenderUnit.Millimeters)
+            except (AttributeError, TypeError):
+                pass  # older binding: keep the default tolerance unit
+            layer.setRenderer(cluster)
             pal = QgsPalLayerSettings()
             pal.fieldName = "name"
             layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
