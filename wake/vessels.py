@@ -193,6 +193,7 @@ class VesselStore:
         self._fid = {}       # mmsi -> feature id in the layer
         self._pending_new = set()
         self._pending_upd = set()
+        self._moving_only = False  # "show only moving vessels" filter state
         # Session-long memory of each vessel's static/identity fields (type,
         # name, dimensions…). Static messages broadcast only every ~6 min, so a
         # vessel that leaves the view and returns, or is expired, would otherwise
@@ -218,6 +219,7 @@ class VesselStore:
         self._add_actions(layer)
         self._style(layer)
         QgsProject.instance().addMapLayer(layer)
+        self._apply_moving_filter()  # honour the toggle across start/stop
 
     def _add_actions(self, layer):
         """Right-click / Identify actions that open the vessel's page (photo +
@@ -245,6 +247,39 @@ class VesselStore:
         self._pending_new.clear()
         self._pending_upd.clear()
         return layer
+
+    #: speed (knots) at or below which a vessel counts as stationary/moored.
+    #: Above it the vessel is treated as under way. Kept small to swallow the
+    #: GPS jitter a moored boat reports, but below any real steerage way.
+    MOVING_KNOTS = 0.5
+
+    def moving_count(self):
+        """How many tracked vessels are under way (SOG above MOVING_KNOTS)."""
+        n = 0
+        for rec in self._records.values():
+            try:
+                if float(rec.get("sog")) > self.MOVING_KNOTS:
+                    n += 1
+            except (TypeError, ValueError):
+                pass
+        return n
+
+    def set_moving_filter(self, on):
+        """Show only vessels under way (SOG above MOVING_KNOTS) when ``on``.
+        Applied as a layer subset filter, so moored/anchored craft are hidden
+        from the map without being dropped from the store."""
+        self._moving_only = bool(on)
+        self._apply_moving_filter()
+
+    def _apply_moving_filter(self):
+        if not self._layer_valid():
+            return
+        expr = f"\"sog\" > {self.MOVING_KNOTS}" if self._moving_only else ""
+        try:
+            self._layer.setSubsetString(expr)
+        except Exception as exc:  # noqa: BLE001 - never let a filter break data
+            QgsMessageLog.logMessage(
+                f"moving filter skipped: {exc}", "Wake", Qgis.MessageLevel.Warning)
 
     def _layer_valid(self):
         try:

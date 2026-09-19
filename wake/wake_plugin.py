@@ -13,6 +13,7 @@ from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (
     QAction, QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QRadioButton, QButtonGroup, QPushButton, QGroupBox, QPlainTextEdit,
+    QCheckBox,
 )
 from qgis.core import (
     QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
@@ -95,6 +96,7 @@ class WakePlugin:
         self._running = False
         self.log_view = None
         self.rb_view = None
+        self.chk_moving = None
         self._extent_timer = None
 
     # --- plugin lifecycle ------------------------------------------------
@@ -193,6 +195,13 @@ class WakePlugin:
         self.btn_start.clicked.connect(self._on_start_clicked)
         layout.addWidget(self.btn_start)
 
+        self.chk_moving = QCheckBox("Show only moving vessels")
+        self.chk_moving.setToolTip(
+            "Hide moored and anchored vessels, showing only those under way "
+            "(speed over ground above 0.5 knots).")
+        self.chk_moving.toggled.connect(self._on_moving_toggled)
+        layout.addWidget(self.chk_moving)
+
         self.lbl_status = QLabel("Idle")
         layout.addWidget(self.lbl_status)
 
@@ -232,6 +241,9 @@ class WakePlugin:
         if self._running:
             self._stop()
             self._start()
+
+    def _on_moving_toggled(self, checked):
+        self.store.set_moving_filter(checked)
 
     def _on_area_mode_changed(self, *_):
         if self.rb_draw.isChecked():
@@ -369,5 +381,13 @@ class WakePlugin:
         self._update_status()
 
     def _update_status(self):
-        if self.lbl_status is not None:
-            self.lbl_status.setText(f"{self._last_status} · {self.store.count()} vessels")
+        if self.lbl_status is None:
+            return
+        total = self.store.count()
+        if self.chk_moving is not None and self.chk_moving.isChecked():
+            # filter is on — report what's actually shown vs. the total tracked
+            self.lbl_status.setText(
+                f"{self._last_status} · {self.store.moving_count()} moving "
+                f"of {total} vessels")
+        else:
+            self.lbl_status.setText(f"{self._last_status} · {total} vessels")
