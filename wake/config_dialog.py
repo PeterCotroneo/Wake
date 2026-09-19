@@ -16,10 +16,12 @@ def _setting_key(provider_cls, field_key):
 
 
 def load_settings(provider_cls):
-    """Return the stored {field key: value} for a provider."""
+    """Return the stored {field key: value} for a provider, falling back to each
+    field's declared default when nothing has been saved yet."""
     settings = QgsSettings()
     return {
-        f["key"]: settings.value(_setting_key(provider_cls, f["key"]), "", type=str)
+        f["key"]: settings.value(
+            _setting_key(provider_cls, f["key"]), f.get("default", ""), type=str)
         for f in provider_cls.config_fields
     }
 
@@ -58,7 +60,8 @@ class ProviderConfigDialog(QDialog):
                 if field.get("placeholder"):
                     edit.setPlaceholderText(field["placeholder"])
                 edit.setText(settings.value(
-                    _setting_key(provider_cls, field["key"]), "", type=str))
+                    _setting_key(provider_cls, field["key"]),
+                    field.get("default", ""), type=str))
                 form.addRow(field["label"], edit)
                 self._edits[field["key"]] = edit
             layout.addLayout(form)
