@@ -26,7 +26,11 @@ from .config_dialog import ProviderConfigDialog, load_settings, is_configured
 from ._debug import dbg, add_sink, clear_sinks
 
 FLUSH_MS = 1000            # batch map updates once a second
-STALE_SECONDS = 600        # drop vessels not heard from in 10 minutes
+STALE_SECONDS = 240        # drop vessels not heard from in 4 minutes. Kept just
+                           # above the ~3-min report interval of moored/Class-B
+                           # craft so they don't flicker, while vessels that have
+                           # actually left the view fall off quickly — so the
+                           # count tracks "present now", not "seen recently".
 plugin_dir = os.path.dirname(__file__)
 
 
