@@ -9,17 +9,15 @@ PROVIDERS + each provider's config_fields — nothing else needs to change.
 from .base import AisProvider
 from .aisstream import AisStreamProvider, OpenWatersProvider
 from .digitraffic import DigitrafficProvider
-from .local_receiver import LocalReceiverProvider
 
 # id -> provider class (order shown in the dropdown)
 PROVIDERS = {
     AisStreamProvider.id: AisStreamProvider,
     OpenWatersProvider.id: OpenWatersProvider,
     DigitrafficProvider.id: DigitrafficProvider,
-    LocalReceiverProvider.id: LocalReceiverProvider,
 }
 
 __all__ = [
     "AisProvider", "AisStreamProvider", "OpenWatersProvider",
-    "DigitrafficProvider", "LocalReceiverProvider", "PROVIDERS",
+    "DigitrafficProvider", "PROVIDERS",
 ]
