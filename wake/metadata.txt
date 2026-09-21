@@ -12,6 +12,6 @@ repository=https://github.com/PeterCotroneo/Wake
 homepage=https://github.com/PeterCotroneo/Wake
 category=Plugins
 icon=icon.svg
-experimental=True
+experimental=False
 deprecated=False
 tags=ais,vessel,ship,marine,maritime,live,traffic,aisstream,navigation,realtime
