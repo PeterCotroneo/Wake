@@ -2,32 +2,57 @@
 
 Watch **live marine vessel traffic** on your map. Wake streams real-time AIS
 ship positions into QGIS and shows vessels moving — track your current map view,
-or draw an area to watch.
+or draw an area to watch. Wake shows *live* traffic only; it does not replay
+history.
 
-Uses free AIS data from **aisstream.io** (a free account and API key are
-required; you supply your own key). Wake shows *live* traffic only — it does not
-replay history.
+![Wake tracking vessels in the Salish Sea](docs/img/01-salish-sea.png)
 
-## Why Wake
-
-The existing AIS options for QGIS are either receiver-only (need physical AIS
-hardware) or track vessels one-by-one by MMSI number and aren't in the official
-plugin repository. Wake is different:
+## Features
 
 - **Area-based, not MMSI-based** — watch *all* traffic in your map view or a drawn box, not just ships you already know.
-- **No extra dependencies** — uses Qt's built-in WebSocket, so it installs cleanly from the official QGIS plugin repository.
-- **Class A *and* Class B** — sees cargo/tankers *and* the smaller vessels (fishing, leisure) that Class-A-only tools miss.
-- **Real vessels** — heading, speed, ship type, name and destination, styled on the map.
-- **Extensible** — a provider abstraction so other AIS sources (AISHub, a local SDR/NMEA feed, …) can be added without touching the map or UI.
+- **Multiple data sources** — pick a provider in the panel; more can be added without touching the map or UI:
+  - **aisstream.io** — global reach, free account and API key (you supply your own).
+  - **Open Waters (aiscast)** — open volunteer network, free token (positions only, no ship types).
+  - **Digitraffic** — Finland and the Baltic, **no key required**.
+- **Class A *and* Class B** — cargo and tankers *and* the smaller fishing/leisure craft that Class-A-only tools miss.
+- **Rich vessel detail** — coloured by ship type, rotated by heading, with name, flag/country, speed, destination and dimensions. Click a vessel to Identify it, with one-click links out to MarineTraffic and VesselFinder.
+- **Cluster badges** — busy harbours collapse into a single marker with a count; zoom in and they fan out into individual vessels.
+- **Show only moving vessels** — one toggle hides moored and anchored craft (by speed over ground), so you see just what is under way.
+- **Resilient** — auto-reconnects after a laptop sleep or network drop; no extra dependencies (uses Qt's built-in WebSocket), so it installs cleanly from the QGIS plugin repository.
 
 Pairs naturally with [SeaState US](https://github.com/PeterCotroneo/SeaState-US):
 vessel movement and coastal conditions in one map.
 
-## Getting a key
+## Screenshots
 
-Create a free account at [aisstream.io](https://aisstream.io/), generate an API
-key, and paste it into Wake's panel (stored in QGIS settings, never in the
-project or the repo).
+Identify any vessel for its full AIS detail and flag, with links out to MarineTraffic / VesselFinder:
+
+![Identify a vessel](docs/img/02-identify.png)
+
+Global reach — a lone tanker tracked far off the Somali coast:
+
+![Offshore tracking](docs/img/03-offshore.png)
+
+## Install
+
+1. Download this repository as a ZIP (or clone it).
+2. In QGIS: **Plugins → Manage and Install Plugins → Install from ZIP**, and select the `wake/` folder zipped, or copy `wake/` into your QGIS plugins directory.
+3. Enable **Wake** in the plugin list. A **Wake** panel appears on the right.
+
+## Usage
+
+1. In the **Wake** panel, choose a **Source** and click **Configure…** to enter a key/token if the provider needs one (Digitraffic needs none).
+2. Choose **Track the current map view** or **Draw an area on the map**.
+3. Click **Start tracking**. Vessels stream in and move in real time. Pan or zoom and the watched area follows.
+
+## Data sources and coverage
+
+Wake is only as good as the feed behind it, and free AIS feeds are **terrestrial
+and volunteer-fed** — dense around Europe and North America, sparse or empty
+elsewhere (for example, the Persian Gulf and much of Asia). Open-ocean and
+low-coverage regions need commercial **satellite** AIS, which Wake does not ship
+with. Digitraffic covers Finnish/Baltic waters only. All sources are live; Wake
+does not store or replay history.
 
 ## Layout
 
@@ -35,18 +60,21 @@ project or the repo).
 wake/
   metadata.txt          QGIS plugin metadata
   __init__.py           classFactory entry point
-  wake_plugin.py        plugin: dock panel, "Track this area", start/stop, status
-  vessels.py            live vessel layer + batched updates + styling
+  wake_plugin.py        dock panel, area selection, start/stop, status, clustering + moving filter
+  vessels.py            live vessel layer, batched updates, styling, ship-type memory
+  config_dialog.py      schema-driven provider configuration dialog
+  mid.py                MMSI -> flag/country lookup
   providers/
     base.py             AisProvider abstraction + normalised vessel contract
-    aisstream.py        aisstream.io provider (Qt WebSocket)
+    aisstream.py        aisstream.io and Open Waters providers (Qt WebSocket)
+    digitraffic.py      Digitraffic provider (keyless REST polling)
     __init__.py         provider registry
 ```
 
-## Status
+## Requests
 
-Early scaffold. The provider layer (aisstream.io over Qt WebSockets) is in place
-and the live feed is verified; the map layer and dock UI are being wired next.
+Want a specific AIS provider added? I'm happy to add one. Ping me at
+**peter.cotroneo.qgis@gmail.com** with the source and I'll take a look.
 
 ## License
 
