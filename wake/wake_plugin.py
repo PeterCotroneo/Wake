@@ -376,7 +376,10 @@ class WakePlugin:
         self._update_status()
 
     def _on_error(self, text):
-        self.iface.messageBar().pushWarning("Wake", text)
+        # Surface errors quietly in the status line and Activity Log rather than
+        # popping a message-bar banner — transient reconnects would otherwise
+        # flash a warning repeatedly.
+        dbg(f"Error: {text}")
         self._last_status = f"Error: {text}"
         self._update_status()
 
