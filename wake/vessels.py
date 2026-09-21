@@ -229,7 +229,7 @@ class VesselStore:
             try:
                 url_type = Qgis.AttributeActionType.OpenUrl
             except AttributeError:
-                url_type = QgsAction.OpenUrl
+                url_type = QgsAction.ActionType.OpenUrl
             targets = [
                 ("Look up on MarineTraffic",
                  'https://www.marinetraffic.com/en/ais/details/ships/mmsi:[% "mmsi" %]'),

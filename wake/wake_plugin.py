@@ -43,7 +43,7 @@ class RectangleMapTool(QgsMapTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.canvas = canvas
-        self.rb = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+        self.rb = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         self.rb.setColor(QColor(30, 120, 200, 60))
         self.rb.setStrokeColor(QColor(30, 120, 200))
         self.rb.setWidth(1)
@@ -51,7 +51,7 @@ class RectangleMapTool(QgsMapTool):
 
     def canvasPressEvent(self, event):
         self._start = self.toMapCoordinates(event.pos())
-        self.rb.reset(QgsWkbTypes.PolygonGeometry)
+        self.rb.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
 
     def canvasMoveEvent(self, event):
         if self._start is not None:
@@ -67,7 +67,7 @@ class RectangleMapTool(QgsMapTool):
             self.rectangle_drawn.emit(rect)
 
     def _draw(self, rect):
-        self.rb.reset(QgsWkbTypes.PolygonGeometry)
+        self.rb.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
         corners = [
             QgsPointXY(rect.xMinimum(), rect.yMinimum()),
             QgsPointXY(rect.xMaximum(), rect.yMinimum()),
@@ -79,7 +79,7 @@ class RectangleMapTool(QgsMapTool):
         self.rb.addPoint(corners[0], True)
 
     def clear(self):
-        self.rb.reset(QgsWkbTypes.PolygonGeometry)
+        self.rb.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
 
 
 class WakePlugin:

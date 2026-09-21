@@ -7,22 +7,29 @@ and differ only by URL and the label of their key field. Uses Qt's built-in
 QWebSocket — no external dependency.
 """
 
+import importlib
 import json
 import time
 
-from qgis.PyQt.QtCore import QUrl, QTimer
-
-# qgis.PyQt does not forward QtWebSockets; import it from the binding directly.
-try:
-    from PyQt6.QtWebSockets import QWebSocket
-except ImportError:  # pragma: no cover - QGIS 3.x
-    try:
-        from PyQt5.QtWebSockets import QWebSocket
-    except ImportError:
-        QWebSocket = None
+from qgis.PyQt.QtCore import QUrl, QTimer, QObject
 
 from .base import AisProvider
 from .._debug import dbg
+
+
+def _load_qwebsocket():
+    """QtWebSockets is not exposed through qgis.PyQt, so load it from whichever
+    Qt binding qgis.PyQt is already using (PyQt6 on QGIS 4/Qt6, PyQt5 on QGIS
+    3/Qt5). The binding name is read from a real Qt class's module so it is never
+    hard-coded to a specific PyQt."""
+    binding = QObject.__module__.split(".")[0]
+    try:
+        return importlib.import_module(binding + ".QtWebSockets").QWebSocket
+    except ImportError:
+        return None
+
+
+QWebSocket = _load_qwebsocket()
 
 RECONNECT_MS = 3000
 WATCHDOG_MS = 30000        # how often to check the stream is still alive
