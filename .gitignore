@@ -221,3 +221,7 @@ __marimo__/
 aisstream_key.txt
 *.key
 secrets.*
+
+# built plugin package
+/Wake.zip
+*.zip
