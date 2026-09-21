@@ -9,7 +9,7 @@ Vessels not heard from for a while are expired.
 
 import time
 
-from qgis.PyQt.QtCore import QVariant, QDateTime
+from qgis.PyQt.QtCore import QVariant
 from qgis.core import (
     QgsVectorLayer,
     QgsFeature,

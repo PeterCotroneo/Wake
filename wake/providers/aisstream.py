@@ -242,7 +242,7 @@ class AisStreamProvider(AisStreamLikeProvider):
                  '<a href="https://aisstream.io">aisstream.io</a>, generate an '
                  'API key, and paste it here.')
     config_fields = [
-        {"key": "api_key", "label": "API key", "secret": True,
+        {"key": "api_key", "label": "API key", "masked": True,
          "placeholder": "aisstream.io API key"},
     ]
 
@@ -257,6 +257,6 @@ class OpenWatersProvider(AisStreamLikeProvider):
                  '(personal tier: 20°×20° area). This feed carries positions '
                  'and names but not ship types, so vessels show as Unknown.')
     config_fields = [
-        {"key": "api_key", "label": "Token", "secret": True,
+        {"key": "api_key", "label": "Token", "masked": True,
          "placeholder": "aiscast token"},
     ]

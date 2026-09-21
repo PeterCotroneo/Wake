@@ -40,7 +40,7 @@ class AisProvider(QObject):
     #: one-line help / how-to shown in the configure dialog
     help_text = ""
     #: settings the provider needs, rendered by the configure dialog as fields.
-    #: each is {"key", "label", "secret" (bool), "placeholder" (optional)}.
+    #: each is {"key", "label", "masked" (bool), "placeholder" (optional)}.
     #: an empty list means the provider needs no configuration.
     config_fields = []
 

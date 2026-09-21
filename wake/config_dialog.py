@@ -55,7 +55,7 @@ class ProviderConfigDialog(QDialog):
             settings = QgsSettings()
             for field in provider_cls.config_fields:
                 edit = QLineEdit()
-                if field.get("secret"):
+                if field.get("masked"):
                     edit.setEchoMode(QLineEdit.EchoMode.Password)
                 if field.get("placeholder"):
                     edit.setPlaceholderText(field["placeholder"])

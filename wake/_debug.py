@@ -5,8 +5,10 @@ sinks. No file is written. All callers are on the GUI thread, so sinks may
 touch widgets directly.
 """
 
+import logging
 import time
 
+_log = logging.getLogger("wake")
 _sinks = []
 
 
@@ -25,4 +27,4 @@ def dbg(msg):
         try:
             fn(line)
         except Exception:
-            pass
+            _log.debug("activity sink failed", exc_info=True)
