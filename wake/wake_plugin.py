@@ -19,7 +19,9 @@ from qgis.core import (
     QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
     QgsRectangle, QgsPointXY, QgsWkbTypes, QgsMessageLog, Qgis,
 )
-from qgis.gui import QgsMapTool, QgsRubberBand, QgsCollapsibleGroupBox
+from qgis.gui import (
+    QgsMapTool, QgsRubberBand, QgsCollapsibleGroupBox, QgsHighlight,
+)
 
 from .providers import PROVIDERS
 from .vessels import VesselStore
@@ -367,9 +369,23 @@ class WakePlugin:
             if bbox is not None:
                 self.store.retain_within(bbox)
             self.store.expire(STALE_SECONDS)
+            self._dismiss_stale_highlights()
         except Exception as exc:  # noqa: BLE001
             dbg(f"Update error: {exc}")
         self._update_status()
+
+    def _dismiss_stale_highlights(self):
+        """The Identify tool's red highlight marks where a feature was when
+        clicked and QGIS never moves it, so on a moving vessel it lingers at the
+        wrong spot. Hide our layer's highlights (non-destructively) once
+        positions have moved on. Other layers' highlights are left untouched."""
+        layer = self.store.layer()
+        if layer is None:
+            return
+        for item in self.iface.mapCanvas().scene().items():
+            if (isinstance(item, QgsHighlight) and item.isVisible()
+                    and item.layer() is layer):
+                item.hide()
 
     def _on_status(self, text):
         self._last_status = text
