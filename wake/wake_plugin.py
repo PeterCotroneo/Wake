@@ -98,7 +98,11 @@ class WakePlugin:
         self._running = False
         self.log_view = None
         self.rb_view = None
+        self.rb_draw = None
         self.chk_moving = None
+        self.btn_start = None
+        self.lbl_status = None
+        self.cbo_provider = None
         self._extent_timer = None
 
     # --- plugin lifecycle ------------------------------------------------
@@ -144,6 +148,8 @@ class WakePlugin:
             if self.dock is None:
                 self.dock = self._build_dock()
                 self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
+                self.iface.mainWindow().resizeDocks(
+                    [self.dock], [420], Qt.Orientation.Horizontal)
             self.dock.show()
         elif self.dock is not None:
             self.dock.hide()
@@ -151,6 +157,8 @@ class WakePlugin:
     # --- UI --------------------------------------------------------------
     def _build_dock(self):
         dock = QDockWidget("Wake", self.iface.mainWindow())
+        dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
@@ -205,6 +213,7 @@ class WakePlugin:
         layout.addWidget(self.chk_moving)
 
         self.lbl_status = QLabel("Idle")
+        self.lbl_status.setWordWrap(True)  # long errors wrap, don't widen the dock
         layout.addWidget(self.lbl_status)
 
         # collapsible activity log directly under the status (no gap)
