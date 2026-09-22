@@ -5,6 +5,14 @@ ship positions into QGIS and shows vessels moving — track your current map vie
 or draw an area to watch. Wake shows *live* traffic only; it does not replay
 history.
 
+Wake is one of three sibling plugins built on the same live-tracking engine — a
+pluggable data-source layer, a moving-point map layer, clustering and identify —
+covering **sea, sky and space**:
+
+- **Wake** — marine vessels (this one)
+- [Contrail](https://github.com/PeterCotroneo/Contrail) — aircraft (ADS-B)
+- [Zenith](https://github.com/PeterCotroneo/Zenith) — satellites
+
 ![Wake tracking vessels in the Salish Sea](docs/img/01-salish-sea.png)
 
 ## Features
