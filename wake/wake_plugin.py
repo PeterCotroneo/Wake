@@ -365,6 +365,8 @@ class WakePlugin:
             return
         bbox = self._bbox_wgs84()
         if bbox is not None:
+            dbg("Watching area — lat {:.2f}…{:.2f}, lon {:.2f}…{:.2f}".format(
+                bbox[0], bbox[2], bbox[1], bbox[3]))
             self.provider.update_area([bbox])
             self.store.retain_within(bbox)  # drop vessels outside the new view
 
